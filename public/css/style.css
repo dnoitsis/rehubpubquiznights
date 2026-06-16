@@ -1,0 +1,235 @@
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0e0b06;
+  --surface: #1a140a;
+  --surface2: #241b0d;
+  --border: #3a2a14;
+  --accent: #69ed63;
+  --accent2: #69ed63;
+  --green: #69ed63;
+  --red: #e05252;
+  --yellow: #69ed63;
+  --text: #f0e6d0;
+  --muted: #7a6645;
+  --radius: 12px;
+  --shadow: 0 4px 24px rgba(0,0,0,.65);
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background: url('/images/quiz-nights.png') center/cover no-repeat fixed;
+  opacity: 0.10;
+  pointer-events: none;
+}
+body > * { position: relative; z-index: 1; }
+
+/* ── Typography ───────────────────────────────────────────── */
+h1 { font-size: clamp(1.8rem, 5vw, 2.8rem); font-weight: 800; letter-spacing: -.02em; }
+h2 { font-size: clamp(1.2rem, 3vw, 1.7rem); font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p, label { font-size: .95rem; line-height: 1.6; color: var(--muted); }
+
+/* ── Layout ───────────────────────────────────────────────── */
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+.flex { display: flex; align-items: center; gap: .75rem; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.stack { display: flex; flex-direction: column; gap: .75rem; }
+.mt-1 { margin-top: .5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.text-center { text-align: center; }
+.full-width { width: 100%; }
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .65rem 1.4rem; border-radius: 8px; border: none;
+  font-size: .9rem; font-weight: 600; cursor: pointer;
+  transition: all .15s; text-decoration: none; white-space: nowrap;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #0f1117; }
+.btn-primary:hover:not(:disabled) { background: #3ec438; color: #fff; transform: translateY(-1px); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: #e05555; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--surface2); }
+.btn-success { background: var(--green); color: #0f1117; }
+.btn-success:hover:not(:disabled) { background: #3ec438; color: #fff; }
+.btn-sm { padding: .4rem .9rem; font-size: .82rem; }
+.btn-lg { padding: .9rem 2rem; font-size: 1rem; border-radius: 10px; }
+
+/* ── Form elements ────────────────────────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: .4rem; }
+.form-group label { font-size: .82rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: .05em; }
+input, select, textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: .6rem .85rem;
+  font-size: .95rem;
+  width: 100%;
+  transition: border-color .15s;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; }
+select option { background: var(--surface2); }
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge {
+  display: inline-block; padding: .2rem .6rem;
+  border-radius: 20px; font-size: .75rem; font-weight: 700;
+}
+.badge-accent { background: rgba(108,99,255,.2); color: var(--accent); }
+.badge-green { background: rgba(67,233,123,.15); color: var(--green); }
+.badge-red { background: rgba(255,107,107,.15); color: var(--red); }
+.badge-yellow { background: rgba(255,217,61,.15); color: var(--yellow); }
+
+/* ── Nav ──────────────────────────────────────────────────── */
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.nav-logo {
+  font-weight: 800; font-size: 1.1rem; color: var(--accent); text-decoration: none;
+  display: flex; align-items: center; gap: .5rem;
+}
+.nav-logo img { height: 36px; width: auto; object-fit: contain; }
+.nav-links { display: flex; gap: .5rem; }
+
+/* ── Progress bar ─────────────────────────────────────────── */
+.progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+
+/* ── Timer circle ─────────────────────────────────────────── */
+.timer-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.timer-svg { transform: rotate(-90deg); }
+.timer-bg { fill: none; stroke: var(--border); stroke-width: 5; }
+.timer-ring { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .9s linear, stroke .3s; }
+.timer-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 800; }
+
+/* ── Answer options ───────────────────────────────────────── */
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+.option-btn {
+  display: flex; align-items: center; gap: .85rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left; color: var(--text); font-size: .95rem; font-weight: 500;
+  overflow: hidden; min-width: 0;
+}
+.option-btn span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 1;
+}
+.option-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(108,99,255,.08); transform: translateY(-2px); }
+.option-btn:disabled { cursor: default; }
+.option-btn.correct { border-color: var(--green); background: rgba(67,233,123,.12); }
+.option-btn.wrong { border-color: var(--red); background: rgba(255,107,107,.1); }
+.option-btn.selected { border-color: var(--accent); }
+.option-letter {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 800; flex-shrink: 0;
+  background: var(--border); color: var(--muted);
+}
+.option-btn.correct .option-letter { background: var(--green); color: #0f1117; }
+.option-btn.wrong .option-letter { background: var(--red); color: #fff; }
+.option-btn.selected:not(.correct):not(.wrong) .option-letter { background: var(--accent); color: #fff; }
+
+/* ── Leaderboard ──────────────────────────────────────────── */
+.leaderboard-row {
+  display: flex; align-items: center; gap: 1rem;
+  padding: .75rem 1rem;
+  border-radius: 8px;
+  background: var(--surface2);
+  transition: background .2s;
+}
+.leaderboard-row:first-child { background: rgba(108,99,255,.15); border: 1px solid rgba(108,99,255,.3); }
+.rank { font-size: 1.1rem; font-weight: 800; width: 28px; text-align: center; }
+.player-name { flex: 1; font-weight: 600; }
+.player-score { font-weight: 800; color: var(--accent); }
+
+/* ── Answer bar chart ─────────────────────────────────────── */
+.answer-bar { display: flex; flex-direction: column; gap: .35rem; }
+.answer-bar-row { display: flex; align-items: center; gap: .75rem; font-size: .85rem; }
+.bar-label { width: 20px; font-weight: 700; }
+.bar-track { flex: 1; height: 22px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; background: var(--accent); }
+.bar-fill.correct-bar { background: var(--green); }
+.bar-count { width: 24px; text-align: right; color: var(--muted); }
+
+/* ── Misc ─────────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 1.25rem 0; }
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+.empty-state .icon { font-size: 3rem; margin-bottom: .75rem; }
+/* ── Toast notifications ──────────────────────────────────── */
+.toast-stack {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
+  display: flex; flex-direction: column; gap: .5rem; align-items: flex-end;
+  pointer-events: none;
+}
+.toast {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: .75rem 1.2rem;
+  font-size: .9rem; font-weight: 600; color: var(--text);
+  box-shadow: var(--shadow); pointer-events: all; max-width: 340px;
+  animation: toastIn .22s ease;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.toast.success { border-color: var(--green);  color: var(--green);  }
+.toast.error   { border-color: var(--red);    color: var(--red);    }
+.toast.warning { border-color: var(--yellow); color: var(--yellow); }
+.toast.info    { border-color: var(--accent); color: var(--accent); }
+@keyframes toastIn { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
+
+/* ── Confirm dialog ───────────────────────────────────────── */
+.confirm-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.confirm-overlay.hidden { display: none; }
+.confirm-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2rem; width: 100%; max-width: 400px;
+}
+.confirm-box p { font-size: 1rem; font-weight: 600; line-height: 1.5; margin-bottom: 1.5rem; }
+.confirm-actions { display: flex; gap: .75rem; justify-content: flex-end; }
+
+/* ── QR / code display ────────────────────────────────────── */
+.room-code {
+  font-size: clamp(2.5rem, 10vw, 4rem);
+  font-weight: 900;
+  letter-spacing: .2em;
+  color: var(--accent);
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .options-grid { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .nav-links .btn span { display: none; }
+}

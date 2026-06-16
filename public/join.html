@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Game — ReHaB Pub Quiz Nights</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; gap: 2rem; }
+    .join-card { width: 100%; max-width: 380px; }
+    .code-display { font-size: 2rem; font-weight: 900; letter-spacing: .15em; color: var(--accent); text-align: center; padding: .5rem 0; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <img src="/images/logo-crop.png" alt="ReHaB Pub" onerror="this.style.display='none'">
+      ReHaB Pub Quiz Nights
+    </a>
+  </nav>
+
+  <div class="hero">
+    <div class="text-center">
+      <img src="/images/cheers.png" alt="" style="height:80px;width:auto;object-fit:contain">
+      <h2 class="mt-1">You're joining</h2>
+    </div>
+
+    <div class="card join-card">
+      <p class="text-center" style="font-size:.85rem;color:var(--muted)">Room code</p>
+      <div class="code-display" id="codeDisplay"></div>
+      <div class="divider"></div>
+      <div class="stack">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="playerName" placeholder="Enter your name" maxlength="24" autofocus>
+        </div>
+        <button class="btn btn-primary btn-lg full-width" onclick="joinGame()">Join Game →</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code') || '';
+    if (!code) window.location.href = '/';
+
+    document.getElementById('codeDisplay').textContent = code;
+    document.getElementById('playerName').addEventListener('keydown', e => {
+      if (e.key === 'Enter') joinGame();
+    });
+
+    function joinGame() {
+      const name = document.getElementById('playerName').value.trim();
+      if (!name) {
+        document.getElementById('playerName').focus();
+        return;
+      }
+      window.location.href = `/play?code=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+    }
+  </script>
+</body>
+</html>

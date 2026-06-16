@@ -1,0 +1,52 @@
+{
+  "title": "General Knowledge",
+  "description": "A classic general knowledge quiz",
+  "settings": {
+    "flow": "host",
+    "timeLimit": 30,
+    "showLeaderboard": true
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "text": "What is the capital of France?",
+      "options": ["London", "Berlin", "Paris", "Madrid"],
+      "correct": 2,
+      "timeLimit": 20,
+      "points": 100
+    },
+    {
+      "id": "q2",
+      "text": "How many planets are in our solar system?",
+      "options": ["7", "8", "9", "10"],
+      "correct": 1,
+      "timeLimit": 20,
+      "points": 100,
+      "explanation": "Pluto was reclassified as a dwarf planet in 2006, leaving 8 planets."
+    },
+    {
+      "id": "q3",
+      "text": "Who wrote 'Romeo and Juliet'?",
+      "options": ["Charles Dickens", "William Shakespeare", "Jane Austen", "Mark Twain"],
+      "correct": 1,
+      "timeLimit": 25,
+      "points": 150
+    },
+    {
+      "id": "q4",
+      "text": "What is the largest ocean on Earth?",
+      "options": ["Atlantic", "Indian", "Arctic", "Pacific"],
+      "correct": 3,
+      "timeLimit": 20,
+      "points": 100
+    },
+    {
+      "id": "q5",
+      "text": "What year did World War II end?",
+      "options": ["1943", "1944", "1945", "1946"],
+      "correct": 2,
+      "timeLimit": 25,
+      "points": 200
+    }
+  ]
+}

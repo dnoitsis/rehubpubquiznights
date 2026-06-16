@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — ReHaB Pub Quiz Nights</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* Password gate */
+    #pw-gate {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #pw-gate.hidden { display: none; }
+    .pw-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 2.5rem 2rem; width: 100%;
+      max-width: 380px; text-align: center;
+    }
+    .pw-logo { font-size: 2.5rem; margin-bottom: .75rem; }
+    .pw-card h2 { margin-bottom: .25rem; }
+    .pw-card p { margin-bottom: 1.5rem; }
+    .quiz-list { display: flex; flex-direction: column; gap: .85rem; }
+    .quiz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; transition: border-color .15s; }
+    .quiz-card:hover { border-color: var(--accent); }
+    .quiz-meta { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
+    .quiz-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; overflow-y: auto; }
+    .modal-backdrop.hidden { display: none; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 780px; padding: 2rem; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    /* Tabs */
+    .tab-row { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: .6rem 1rem; border: none; background: none; color: var(--muted); cursor: pointer; font-size: .9rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all .15s; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    /* Question editor */
+    .q-list { display: flex; flex-direction: column; gap: .75rem; }
+    .q-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1rem;
+      cursor: default; transition: border-color .15s, box-shadow .15s;
+    }
+    .q-item.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,99,255,.2); }
+    .q-item.dragging { opacity: .4; }
+    .q-item-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+    .drag-handle {
+      cursor: grab; color: var(--muted); font-size: 1.1rem; padding: .1rem .25rem;
+      border-radius: 4px; transition: color .15s; user-select: none; flex-shrink: 0;
+    }
+    .drag-handle:hover { color: var(--accent); }
+    .drag-handle:active { cursor: grabbing; }
+    .q-num { font-size: .75rem; font-weight: 800; color: var(--muted); background: var(--border); padding: .2rem .5rem; border-radius: 4px; flex-shrink: 0; }
+    .options-editor { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .5rem; }
+    .option-input-row { display: flex; align-items: center; gap: .5rem; }
+    .option-input-row label { font-size: .8rem; font-weight: 700; width: 20px; text-align: center; color: var(--muted); }
+    .correct-radio { width: 16px; height: 16px; accent-color: var(--green); flex-shrink: 0; }
+    .correct-label { font-size: .72rem; color: var(--green); font-weight: 600; }
+    /* Image upload */
+    .img-upload-zone {
+      border: 2px dashed var(--border); border-radius: 10px; padding: 1.5rem;
+      text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .img-upload-zone:hover { border-color: var(--accent); background: rgba(108,99,255,.04); }
+    .img-upload-zone.drag-over { border-color: var(--accent); background: rgba(108,99,255,.08); }
+    .img-preview-wrap { position: relative; display: inline-block; }
+    .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; object-fit: cover; display: block; }
+    .img-remove { position: absolute; top: -8px; right: -8px; background: var(--red); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: .75rem; display: flex; align-items: center; justify-content: center; }
+    /* Import zone */
+    .import-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color .2s; }
+    .import-zone:hover { border-color: var(--accent); }
+    .import-zone.drag-over { border-color: var(--accent); background: rgba(108,99,255,.05); }
+  </style>
+</head>
+<body>
+
+  <!-- Password gate -->
+  <div id="pw-gate">
+    <div class="pw-card">
+      <img src="/images/logo-crop.png" alt="ReHaB" style="height:70px;width:auto;object-fit:contain;margin-bottom:.5rem">
+      <div class="pw-logo"><img src="/images/lock.png" alt="" style="height:2.5rem;width:auto;object-fit:contain"></div>
+      <h2>Admin Access</h2>
+      <p>Enter the admin password to continue</p>
+      <div class="stack">
+        <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()">
+        <button class="btn btn-primary full-width" onclick="checkPw()">Unlock →</button>
+        <p id="pwErr" style="color:var(--red);font-size:.85rem;display:none">Incorrect password</p>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <img src="/images/logo-crop.png" alt="ReHaB Pub" onerror="this.style.display='none'">
+      ReHaB Pub Quiz Nights
+    </a>
+    <div class="nav-links">
+      <a href="/" class="btn btn-ghost btn-sm" style="color:var(--accent)"><img src="/images/arrow.png" alt="" style="height:14px;width:auto;vertical-align:middle;margin-right:.25rem;transform:rotate(180deg)"> Home</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Rejoin banner — shown when a session code is stored in localStorage -->
+    <div id="rejoinBanner" style="display:none;align-items:center;gap:1rem;background:var(--surface2);border:1.5px solid var(--accent);border-radius:var(--radius);padding:.9rem 1.2rem;margin-top:1.5rem">
+      <span style="font-size:1.3rem">🎙</span>
+      <div style="flex:1">
+        <strong style="color:var(--accent)">Active session detected</strong>
+        <span style="color:var(--muted);margin-left:.5rem">Room <strong id="rejoinCode" style="color:var(--text)"></strong></span>
+      </div>
+      <a id="rejoinLink" href="#" class="btn btn-primary btn-sm" target="_blank">Rejoin Host Page →</a>
+      <button class="btn btn-ghost btn-sm" onclick="dismissRejoin()">Dismiss</button>
+    </div>
+
+    <div class="flex-between mt-2">
+      <div>
+        <h2>Quiz Admin</h2>
+        <p>Create, edit, and launch your quizzes</p>
+      </div>
+      <div class="flex">
+        <button class="btn btn-ghost btn-sm" onclick="openImport()">⬆ Import</button>
+        <button class="btn btn-primary" onclick="openCreate()">+ New Quiz</button>
+      </div>
+    </div>
+    <div class="form-group mt-2" style="max-width:380px">
+      <input type="search" id="quizSearch" placeholder="Search quizzes..." oninput="filterQuizzes()" autocomplete="off">
+    </div>
+    <div id="quizList" class="quiz-list mt-2"></div>
+  </div>
+
+  <!-- ── Quiz Editor Modal ─────────────────────────────────────── -->
+  <div id="editorModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">New Quiz</h2>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕ Close</button>
+      </div>
+
+      <div class="tab-row">
+        <button class="tab active" onclick="switchTab('settings')"><img src="/images/settings.png" alt="" style="height:14px;width:auto;vertical-align:middle;margin-right:.25rem"> Settings</button>
+        <button class="tab" onclick="switchTab('questions')">Questions <span id="qCount" class="badge badge-accent"></span></button>
+        <button class="tab" onclick="switchTab('appearance')">Appearance</button>
+      </div>
+
+      <!-- Settings tab -->
+      <div id="tab-settings" class="tab-panel active">
+        <div class="stack">
+          <div class="form-group"><label>Title</label><input type="text" id="quizTitle" placeholder="My Awesome Quiz"></div>
+          <div class="form-group"><label>Description</label><textarea id="quizDesc" placeholder="Brief description shown to players"></textarea></div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Quiz Flow</label>
+              <select id="quizFlow" onchange="onFlowChange()">
+                <option value="host">Host-paced (host advances questions)</option>
+                <option value="timed">Timed (auto-advance after timer)</option>
+                <option value="self-paced">Self-paced (each player advances)</option>
+              </select>
+            </div>
+            <div class="form-group" id="timeLimitGroup">
+              <label>Default Time Limit (seconds)</label>
+              <input type="number" id="timeLimit" value="30" min="5" max="120">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Show Leaderboard after each question?</label>
+            <select id="showLeaderboard">
+              <option value="true">Yes</option>
+              <option value="false">No (only show at end)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questions tab -->
+      <div id="tab-questions" class="tab-panel">
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:.75rem">
+          ⠿ Drag the handle on the left to reorder questions
+        </p>
+        <div id="questionList" class="q-list"></div>
+        <button class="btn btn-ghost full-width mt-2" onclick="addQuestion()">+ Add Question</button>
+      </div>
+
+      <!-- Appearance tab -->
+      <div id="tab-appearance" class="tab-panel">
+        <div class="stack">
+          <div class="form-group">
+            <label>Background Image</label>
+            <p style="font-size:.82rem;margin-bottom:.5rem">Shown behind the quiz on the host and player screens</p>
+            <div class="img-upload-zone" id="imgDropZone" onclick="document.getElementById('bgImageFile').click()">
+              <div id="imgPlaceholder">
+                <p style="font-size:1.5rem;margin-bottom:.4rem">🖼️</p>
+                <p style="font-size:.85rem;color:var(--muted)">Click or drag an image here (JPG, PNG, WebP)</p>
+              </div>
+              <div id="imgPreviewWrap" style="display:none">
+                <div class="img-preview-wrap">
+                  <img id="imgPreview" class="img-preview" alt="Background preview">
+                  <button class="img-remove" onclick="removeImage(event)" title="Remove image">✕</button>
+                </div>
+              </div>
+              <input type="file" id="bgImageFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="handleImageFile(this.files[0])">
+            </div>
+          </div>
+          <div class="form-group" id="bgOpacityGroup" style="display:none">
+            <label>Image Opacity (on host/player screens)</label>
+            <div class="flex" style="gap:.75rem;align-items:center">
+              <input type="range" id="bgOpacity" min="10" max="100" value="30" style="flex:1;accent-color:var(--accent)">
+              <span id="bgOpacityVal" style="width:36px;text-align:right;font-weight:700">30%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="flex" style="justify-content:flex-end; gap:.5rem;">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveQuiz()"><img src="/images/save.png" alt="" style="height:18px;width:auto;vertical-align:middle"> Save Quiz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Import Modal ──────────────────────────────────────────── -->
+  <div id="importModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <h2>Import Quiz</h2>
+        <button class="btn btn-ghost btn-sm" onclick="closeImport()">✕</button>
+      </div>
+      <div class="tab-row">
+        <button class="tab active" onclick="switchImportTab('json')">JSON</button>
+        <button class="tab" onclick="switchImportTab('csv')">CSV</button>
+      </div>
+      <div id="import-json" class="tab-panel active">
+        <p class="mt-1">Import one or more quizzes from a JSON file.</p>
+        <div class="import-zone mt-2" id="jsonDropZone" onclick="document.getElementById('jsonFile').click()">
+          <p>📂 Click or drag a .json file here</p>
+          <input type="file" id="jsonFile" accept=".json" style="display:none" onchange="importFile('json')">
+        </div>
+        <div class="card mt-2" style="font-size:.82rem;color:var(--muted)">
+          <strong>Expected format:</strong> An object with <code>title</code>, <code>description</code>, <code>settings</code>, and <code>questions</code> array.
+        </div>
+      </div>
+      <div id="import-csv" class="tab-panel">
+        <p class="mt-1">Import questions from a CSV. One quiz per unique <code>quiz_title</code>.</p>
+        <div class="import-zone mt-2" id="csvDropZone" onclick="document.getElementById('csvFile').click()">
+          <p>📂 Click or drag a .csv file here</p>
+          <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importFile('csv')">
+        </div>
+        <div class="card mt-2" style="font-size:.82rem;color:var(--muted)">
+          <strong>Columns:</strong> <code>quiz_title, question, a, b, c, d, correct, timelimit, points</code><br>
+          <code>correct</code> is 0-indexed (0=A, 1=B, 2=C, 3=D)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Password gate ───────────────────────────────────────────────
+    const ADMIN_PW = 'admin';
+    function checkPw() {
+      const val = document.getElementById('pwInput').value;
+      if (val === ADMIN_PW) {
+        sessionStorage.setItem('admin_auth', '1');
+        document.getElementById('pw-gate').classList.add('hidden');
+      } else {
+        document.getElementById('pwErr').style.display = 'block';
+        document.getElementById('pwInput').value = '';
+        document.getElementById('pwInput').focus();
+      }
+    }
+    if (sessionStorage.getItem('admin_auth') === '1') {
+      document.getElementById('pw-gate').classList.add('hidden');
+    }
+
+    // ── Rejoin active session ───────────────────────────────────────
+    (function checkRejoin() {
+      const activeCode = localStorage.getItem('rehab_active_session');
+      if (!activeCode) return;
+      const banner = document.getElementById('rejoinBanner');
+      document.getElementById('rejoinCode').textContent = activeCode;
+      document.getElementById('rejoinLink').href = `/host?code=${activeCode}`;
+      banner.style.display = 'flex';
+    })();
+
+    let editingId = null;
+    let questions = [];
+    let bgImageBase64 = null; // stored as data-URL
+    let bgOpacity = 30;
+
+    // ── Quiz list ───────────────────────────────────────────────────
+    let allQuizzes = [];
+
+    async function loadQuizzes() {
+      const res = await fetch('/api/quizzes');
+      allQuizzes = await res.json();
+      filterQuizzes();
+    }
+
+    function filterQuizzes() {
+      const q = (document.getElementById('quizSearch')?.value || '').toLowerCase().trim();
+      const filtered = q
+        ? allQuizzes.filter(qz => qz.title.toLowerCase().includes(q) || (qz.description || '').toLowerCase().includes(q))
+        : allQuizzes;
+      renderQuizList(filtered);
+    }
+
+    function renderQuizList(quizzes) {
+      const el = document.getElementById('quizList');
+      if (!quizzes.length) {
+        el.innerHTML = `<div class="empty-state"><div class="icon"><img src="/images/results.png" alt="" style="height:3rem;width:auto;object-fit:contain"></div><h3>${allQuizzes.length ? 'No quizzes match your search' : 'No quizzes yet'}</h3><p>${allQuizzes.length ? 'Try a different search term.' : 'Create your first quiz or import one.'}</p></div>`;
+        return;
+      }
+      el.innerHTML = quizzes.map(q => `
+        <div class="quiz-card">
+          <div class="flex-between">
+            <h3>${escHtml(q.title)}</h3>
+            <span class="badge badge-accent"><img src="/images/results.png" alt="" style="height:12px;width:auto;vertical-align:middle;margin-right:.2rem">${q.questions?.length || 0} questions</span>
+          </div>
+          <p>${escHtml(q.description || 'No description')}</p>
+          <div class="quiz-meta">
+            <span class="badge badge-yellow">${flowLabel(q.settings?.flow)}</span>
+            ${q.settings?.timeLimit ? `<span class="badge badge-accent">⏱ ${q.settings.timeLimit}s</span>` : ''}
+            ${q.appearance?.bgImage ? `<span class="badge badge-green">🖼 Background</span>` : ''}
+          </div>
+          <div class="quiz-actions">
+            <button class="btn btn-primary btn-sm" onclick="hostQuiz('${q.id}')">▶ Host</button>
+            <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')"><img src="/images/edit.png" alt="" style="height:16px;width:auto;vertical-align:middle"> Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}', '${escHtml(q.title)}')">🗑 Delete</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function flowLabel(f) {
+      return { host: '<img src="/images/user.png" style="height:14px;width:auto;vertical-align:middle"> Host-paced', timed: '⏱ Timed', 'self-paced': '🔓 Self-paced' }[f] || f;
+    }
+
+    // ── Open create ─────────────────────────────────────────────────
+    function openCreate() {
+      editingId = null;
+      questions = [defaultQuestion()];
+      bgImageBase64 = null;
+      bgOpacity = 30;
+      document.getElementById('modalTitle').textContent = 'New Quiz';
+      document.getElementById('quizTitle').value = '';
+      document.getElementById('quizDesc').value = '';
+      document.getElementById('quizFlow').value = 'host';
+      document.getElementById('timeLimit').value = 30;
+      document.getElementById('showLeaderboard').value = 'true';
+      document.getElementById('bgOpacity').value = 30;
+      document.getElementById('bgOpacityVal').textContent = '30%';
+      clearImagePreview();
+      renderQuestions();
+      onFlowChange();
+      switchTab('settings');
+      document.getElementById('editorModal').classList.remove('hidden');
+    }
+
+    // ── Open edit ───────────────────────────────────────────────────
+    async function editQuiz(id) {
+      const res = await fetch(`/api/quizzes/${id}`);
+      const q = await res.json();
+      editingId = id;
+      questions = q.questions || [];
+      bgImageBase64 = q.appearance?.bgImage || null;
+      bgOpacity = q.appearance?.bgOpacity ?? 30;
+      document.getElementById('modalTitle').textContent = 'Edit Quiz';
+      document.getElementById('quizTitle').value = q.title;
+      document.getElementById('quizDesc').value = q.description || '';
+      document.getElementById('quizFlow').value = q.settings?.flow || 'host';
+      document.getElementById('timeLimit').value = q.settings?.timeLimit || 30;
+      document.getElementById('showLeaderboard').value = String(q.settings?.showLeaderboard !== false);
+      document.getElementById('bgOpacity').value = bgOpacity;
+      document.getElementById('bgOpacityVal').textContent = bgOpacity + '%';
+      if (bgImageBase64) {
+        showImagePreview(bgImageBase64);
+      } else {
+        clearImagePreview();
+      }
+      renderQuestions();
+      onFlowChange();
+      switchTab('settings');
+      document.getElementById('editorModal').classList.remove('hidden');
+    }
+
+    function closeModal() { document.getElementById('editorModal').classList.add('hidden'); }
+
+    // ── Tabs ────────────────────────────────────────────────────────
+    function switchTab(name) {
+      const names = ['settings', 'questions', 'appearance'];
+      document.querySelectorAll('.modal .tab-row .tab').forEach((t, i) => {
+        t.classList.toggle('active', names[i] === name);
+      });
+      names.forEach(n => {
+        document.getElementById(`tab-${n}`).classList.toggle('active', n === name);
+      });
+    }
+
+    function onFlowChange() {
+      const flow = document.getElementById('quizFlow').value;
+      document.getElementById('timeLimitGroup').style.opacity = flow === 'host' ? '.4' : '1';
+    }
+
+    // ── Questions ───────────────────────────────────────────────────
+    function defaultQuestion() {
+      return { id: Date.now().toString(), text: '', options: ['', '', '', ''], correct: 0, timeLimit: 30, points: 100 };
+    }
+
+    function addQuestion() { questions.push(defaultQuestion()); renderQuestions(); }
+
+    function removeQuestion(idx) { questions.splice(idx, 1); renderQuestions(); }
+
+    function renderQuestions() {
+      document.getElementById('qCount').textContent = questions.length;
+      const letters = ['A', 'B', 'C', 'D'];
+      const list = document.getElementById('questionList');
+      list.innerHTML = questions.map((q, qi) => `
+        <div class="q-item" draggable="true" data-idx="${qi}">
+          <div class="q-item-header">
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
+            <span class="q-num">Q${qi + 1}</span>
+            <input type="text" value="${escHtml(q.text)}" placeholder="Question text"
+              style="flex:1" oninput="questions[${qi}].text = this.value">
+            <button class="btn btn-danger btn-sm" onclick="removeQuestion(${qi})">✕</button>
+          </div>
+          <div class="options-editor">
+            ${q.options.map((opt, oi) => `
+              <div class="option-input-row">
+                <label>${letters[oi]}</label>
+                <input type="text" value="${escHtml(opt)}" placeholder="Option ${letters[oi]}"
+                  oninput="questions[${qi}].options[${oi}] = this.value">
+                <input type="radio" class="correct-radio" name="correct_${qi}" value="${oi}"
+                  ${q.correct === oi ? 'checked' : ''}
+                  onchange="questions[${qi}].correct = ${oi}"
+                  title="Mark as correct answer">
+              </div>`).join('')}
+          </div>
+          <div class="flex mt-2" style="gap:1rem;font-size:.82rem;color:var(--muted)">
+            <span class="correct-label">✓ = correct answer</span>
+            <label class="flex" style="gap:.3rem">⏱ <input type="number" value="${q.timeLimit || 30}" min="5" max="120"
+              style="width:55px;padding:.2rem .4rem;font-size:.8rem" oninput="questions[${qi}].timeLimit = +this.value"> sec</label>
+            <label class="flex" style="gap:.3rem">★ <input type="number" value="${q.points || 100}" min="10" step="10"
+              style="width:60px;padding:.2rem .4rem;font-size:.8rem" oninput="questions[${qi}].points = +this.value"> pts</label>
+          </div>
+        </div>`).join('');
+
+      initDragDrop(list);
+    }
+
+    // ── Drag & Drop reorder ─────────────────────────────────────────
+    let dragSrcIdx = null;
+
+    function initDragDrop(list) {
+      list.querySelectorAll('.q-item').forEach(item => {
+        item.addEventListener('dragstart', e => {
+          dragSrcIdx = parseInt(item.dataset.idx);
+          item.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        item.addEventListener('dragend', () => {
+          item.classList.remove('dragging');
+          list.querySelectorAll('.q-item').forEach(i => i.classList.remove('drag-over'));
+        });
+        item.addEventListener('dragover', e => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          list.querySelectorAll('.q-item').forEach(i => i.classList.remove('drag-over'));
+          item.classList.add('drag-over');
+        });
+        item.addEventListener('drop', e => {
+          e.preventDefault();
+          const targetIdx = parseInt(item.dataset.idx);
+          if (dragSrcIdx === null || dragSrcIdx === targetIdx) return;
+          const moved = questions.splice(dragSrcIdx, 1)[0];
+          questions.splice(targetIdx, 0, moved);
+          dragSrcIdx = null;
+          renderQuestions();
+        });
+      });
+    }
+
+    // ── Background image ────────────────────────────────────────────
+    document.getElementById('bgOpacity').addEventListener('input', function() {
+      bgOpacity = parseInt(this.value);
+      document.getElementById('bgOpacityVal').textContent = bgOpacity + '%';
+    });
+
+    function handleImageFile(file) {
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) return toast('Image must be under 5MB', 'error');
+      const reader = new FileReader();
+      reader.onload = e => {
+        bgImageBase64 = e.target.result;
+        showImagePreview(bgImageBase64);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function showImagePreview(src) {
+      document.getElementById('imgPlaceholder').style.display = 'none';
+      document.getElementById('imgPreviewWrap').style.display = 'block';
+      document.getElementById('imgPreview').src = src;
+      document.getElementById('bgOpacityGroup').style.display = 'block';
+    }
+
+    function clearImagePreview() {
+      bgImageBase64 = null;
+      document.getElementById('imgPlaceholder').style.display = 'block';
+      document.getElementById('imgPreviewWrap').style.display = 'none';
+      document.getElementById('bgOpacityGroup').style.display = 'none';
+      document.getElementById('bgImageFile').value = '';
+    }
+
+    function removeImage(e) {
+      e.stopPropagation();
+      clearImagePreview();
+    }
+
+    // Drag & drop for image zone
+    const imgZone = document.getElementById('imgDropZone');
+    imgZone.addEventListener('dragover', e => { e.preventDefault(); imgZone.classList.add('drag-over'); });
+    imgZone.addEventListener('dragleave', () => imgZone.classList.remove('drag-over'));
+    imgZone.addEventListener('drop', e => {
+      e.preventDefault(); imgZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) handleImageFile(file);
+    });
+
+    // ── Save ────────────────────────────────────────────────────────
+    async function saveQuiz() {
+      const title = document.getElementById('quizTitle').value.trim();
+      if (!title) return toast('Please enter a title', 'error');
+      if (!questions.length) return toast('Add at least one question', 'error');
+      const data = {
+        title,
+        description: document.getElementById('quizDesc').value.trim(),
+        questions,
+        settings: {
+          flow: document.getElementById('quizFlow').value,
+          timeLimit: parseInt(document.getElementById('timeLimit').value),
+          showLeaderboard: document.getElementById('showLeaderboard').value === 'true'
+        },
+        appearance: {
+          bgImage: bgImageBase64 || null,
+          bgOpacity: bgOpacity
+        }
+      };
+      const url = editingId ? `/api/quizzes/${editingId}` : '/api/quizzes';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const result = await res.json();
+      if (!res.ok) return toast(result.error || 'Save failed', 'error');
+      closeModal();
+      toast(editingId ? 'Quiz updated!' : 'Quiz created!', 'success');
+      loadQuizzes();
+    }
+
+    function deleteQuiz(id, title) {
+      showConfirm(`Delete "${title}"? This cannot be undone.`, async () => {
+        await fetch(`/api/quizzes/${id}`, { method: 'DELETE' });
+        toast('Quiz deleted', 'success');
+        loadQuizzes();
+      });
+    }
+
+    async function hostQuiz(id) {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quizId: id })
+      });
+      const { code } = await res.json();
+      localStorage.setItem('rehab_active_session', code);
+      document.getElementById('rejoinCode').textContent = code;
+      document.getElementById('rejoinLink').href = `/host?code=${code}`;
+      document.getElementById('rejoinBanner').style.display = 'flex';
+      window.open(`/host?code=${code}`, '_blank');
+    }
+
+    function dismissRejoin() {
+      localStorage.removeItem('rehab_active_session');
+      document.getElementById('rejoinBanner').style.display = 'none';
+    }
+
+    // ── Import ──────────────────────────────────────────────────────
+    function openImport() { document.getElementById('importModal').classList.remove('hidden'); }
+    function closeImport() { document.getElementById('importModal').classList.add('hidden'); }
+
+    function switchImportTab(name) {
+      document.querySelectorAll('#importModal .tab').forEach((t, i) => {
+        t.classList.toggle('active', ['json','csv'][i] === name);
+      });
+      document.getElementById('import-json').classList.toggle('active', name === 'json');
+      document.getElementById('import-csv').classList.toggle('active', name === 'csv');
+    }
+
+    async function importFile(type) {
+      const input = document.getElementById(`${type}File`);
+      const file = input.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/quizzes/import/${type}`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.error) return toast(data.error, 'error');
+      toast(`Imported ${data.imported} quiz${data.imported !== 1 ? 'zes' : ''}!`, 'success');
+      closeImport();
+      loadQuizzes();
+    }
+
+    ['json','csv'].forEach(type => {
+      const zone = document.getElementById(`${type}DropZone`);
+      if (!zone) return;
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        const input = document.getElementById(`${type}File`);
+        const dt = new DataTransfer(); dt.items.add(file);
+        input.files = dt.files;
+        importFile(type);
+      });
+    });
+
+    // ── Helpers ─────────────────────────────────────────────────────
+    function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+    function toast(msg, type = 'success') {
+      let stack = document.getElementById('toastStack');
+      if (!stack) {
+        stack = Object.assign(document.createElement('div'), { id: 'toastStack', className: 'toast-stack' });
+        document.body.appendChild(stack);
+      }
+      const el = Object.assign(document.createElement('div'), { className: `toast ${type}`, textContent: msg });
+      stack.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0'; el.style.transform = 'translateX(20px)';
+        setTimeout(() => el.remove(), 240);
+      }, 3200);
+    }
+
+    function showConfirm(msg, onOk, okLabel = 'Delete', danger = true) {
+      let ov = document.getElementById('confirmOverlay');
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'confirmOverlay';
+        ov.className = 'confirm-overlay hidden';
+        ov.innerHTML = `<div class="confirm-box"><p id="confirmMsg"></p><div class="confirm-actions"><button class="btn btn-ghost" id="confirmCancelBtn">Cancel</button><button id="confirmOkBtn">Confirm</button></div></div>`;
+        document.body.appendChild(ov);
+      }
+      document.getElementById('confirmMsg').textContent = msg;
+      const okBtn = document.getElementById('confirmOkBtn');
+      okBtn.textContent = okLabel;
+      okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
+      ov.classList.remove('hidden');
+      okBtn.onclick = () => { ov.classList.add('hidden'); onOk(); };
+      document.getElementById('confirmCancelBtn').onclick = () => ov.classList.add('hidden');
+    }
+
+    loadQuizzes();
+  </script>
+</body>
+</html>

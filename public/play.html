@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Play — ReHaB Pub Quiz Nights</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .play-center {
+      flex: 1; min-height: 0; overflow-y: auto;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 1rem 1.5rem;
+      max-width: 600px; margin: 0 auto; width: 100%;
+      position: relative; z-index: 1;
+    }
+    .nav { position: relative; z-index: 1; }
+    #screen-lobby.active { margin-top: auto; margin-bottom: auto; }
+
+    /* screens */
+    #screen-lobby, #screen-question, #screen-result, #screen-finished { display: none; }
+    #screen-lobby.active, #screen-question.active, #screen-result.active,
+    #screen-finished.active {
+      display: flex; flex-direction: column; width: 100%; gap: 1rem; align-items: center;
+    }
+    /* After reveal: dim non-chosen wrong options so correct stands out */
+    #pOptions .option-btn.reveal-dim { opacity: 0.38; }
+    /* Truncate long question text at 4 lines */
+    #pQText {
+      overflow: hidden; display: -webkit-box;
+      -webkit-line-clamp: 4; -webkit-box-orient: vertical; line-clamp: 4;
+      overflow-wrap: break-word; word-break: break-word;
+    }
+    /* option-btn span truncation is in style.css */
+
+    .score-big { font-size: 2.5rem; font-weight: 900; color: var(--accent); }
+    .result-icon { font-size: 4rem; }
+    .waiting-dots::after { content: '...'; animation: dots 1.2s infinite; }
+    @keyframes dots { 0%,100%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+    .final-card { text-align:center; padding: 2rem; }
+    .q-card { width:100%; background: var(--surface); border: 1px solid var(--border); border-radius:var(--radius); padding:1.5rem; }
+
+    .reconnect-banner {
+      background: rgba(255,217,61,.1); border: 1px solid var(--yellow);
+      border-radius: 8px; padding: .6rem 1rem; font-size: .85rem;
+      color: var(--yellow); font-weight: 600; text-align: center; width: 100%;
+    }
+
+    /* Answer distribution */
+    .dist-bar-row { display: flex; align-items: center; gap: .6rem; font-size: .85rem; margin-bottom: .35rem; }
+    .dist-label { width: 22px; font-weight: 700; flex-shrink: 0; }
+    .dist-track { flex: 1; height: 24px; background: var(--border); border-radius: 5px; overflow: hidden; }
+    .dist-fill { height: 100%; border-radius: 5px; transition: width .6s ease; background: var(--accent); }
+    .dist-fill.correct-fill { background: var(--green); }
+    .dist-fill.my-wrong { background: var(--red); }
+    .dist-meta { min-width: 70px; text-align: right; color: var(--muted); font-size: .78rem; }
+    .dist-meta strong { color: var(--text); }
+
+    /* ── Game paused overlay ───────────────────────────────────── */
+    #pauseOverlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.82); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 1.2rem; text-align: center; padding: 1.5rem;
+    }
+    #pauseOverlay.visible { display: flex; }
+    #pauseOverlay h3 { font-size: 1.6rem; margin: 0; }
+    #pauseOverlay p  { color: var(--muted); margin: 0; max-width: 280px; }
+    .pause-cd { font-size: 5rem; font-weight: 900; color: var(--accent); line-height: 1; }
+
+    /* ── 3-second countdown ────────────────────────────────────── */
+    .countdown-overlay {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 1.5rem; gap: .4rem; min-height: 130px;
+    }
+    .countdown-num {
+      font-size: 5rem; font-weight: 900; color: var(--accent); line-height: 1;
+      animation: cd-pop .6s cubic-bezier(.3,1.4,.6,1) both;
+    }
+    @keyframes cd-pop {
+      0%   { transform: scale(1.5); opacity: .4; }
+      100% { transform: scale(1);   opacity: 1;  }
+    }
+
+    /* ── Leaderboard overlay ───────────────────────────────────── */
+    #lb-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.75); backdrop-filter: blur(4px);
+      opacity: 0; pointer-events: none;
+      transition: opacity .35s ease;
+    }
+    #lb-overlay.visible { opacity: 1; pointer-events: all; }
+    #lb-overlay.visible .lb-panel { transform: translateY(0); }
+    .lb-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 1.75rem; width: 100%;
+      max-width: 460px; max-height: 80vh; overflow-y: auto;
+      transform: translateY(30px); transition: transform .35s ease;
+      margin: 1rem;
+    }
+    .lb-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .lb-panel-header h2 { margin: 0; font-size: 1.3rem; }
+    .lb-close-btn {
+      background: none; border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; width: 32px; height: 32px; font-size: 1rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .15s; flex-shrink: 0;
+    }
+    .lb-close-btn:hover { background: var(--surface2); }
+
+    /* LB entry with score bar */
+    .lb-ov-entry { margin-bottom: .75rem; }
+    .lb-ov-entry:last-child { margin-bottom: 0; }
+    .lb-ov-row { display: flex; align-items: center; gap: .65rem; margin-bottom: .3rem; }
+    .lb-ov-rank  { font-size: 1rem; font-weight: 800; width: 28px; text-align: center; flex-shrink: 0; }
+    .lb-ov-name  { flex: 1; font-weight: 600; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-ov-name.me { color: var(--accent); }
+    .lb-ov-score { font-weight: 800; color: var(--accent); font-size: .95rem; flex-shrink: 0; }
+    .lb-ov-bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .lb-ov-bar-fill { height: 100%; border-radius: 4px; transition: width .7s ease; }
+    .lb-ov-bar-fill.gold   { background: linear-gradient(90deg,#ffd700,#ffaa00); }
+    .lb-ov-bar-fill.silver { background: linear-gradient(90deg,#c0c0c0,#888); }
+    .lb-ov-bar-fill.bronze { background: linear-gradient(90deg,#cd7f32,#a05a2c); }
+    .lb-ov-bar-fill.normal { background: linear-gradient(90deg,var(--accent),#a78bfa); }
+    .lb-ov-bar-fill.me-bar { background: linear-gradient(90deg,#ff6584,#ff8fa3); }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <img src="/images/logo-crop.png" alt="ReHaB Pub" onerror="this.style.display='none'">
+      ReHaB Pub Quiz Nights
+    </a>
+    <div id="navScore" style="display:none" class="badge badge-accent">0 pts</div>
+  </nav>
+
+  <!-- Leaderboard overlay — closeable, reopenable from result screen -->
+  <div id="lb-overlay" onclick="if(event.target===this)hideLBOverlay()">
+    <div class="lb-panel">
+      <div class="lb-panel-header">
+        <h2><img src="/images/trophy.png" alt="" style="height:26px;width:auto;vertical-align:middle;margin-right:.3rem"> Leaderboard</h2>
+        <button class="lb-close-btn" onclick="hideLBOverlay()" title="Close">✕</button>
+      </div>
+      <div id="lb-overlay-rows"></div>
+    </div>
+  </div>
+
+  <!-- Game paused overlay -->
+  <div id="pauseOverlay">
+    <img src="/images/stout.png" alt="" style="height:90px;width:auto;object-fit:contain">
+    <h3>Game Paused</h3>
+    <p>The host disconnected — the game will resume shortly</p>
+    <div id="pauseCountdownPl" class="pause-cd" style="display:none"></div>
+  </div>
+
+  <div class="play-center">
+
+    <!-- LOBBY -->
+    <div id="screen-lobby" class="active">
+      <div class="q-card text-center">
+        <img src="/images/cheers.png" alt="" style="height:80px;width:auto;object-fit:contain">
+        <h2 id="lobbyName" class="mt-1"></h2>
+        <p id="lobbyQuizTitle" class="mt-1"></p>
+        <div class="divider"></div>
+        <p>Waiting for the host to start the game<span class="waiting-dots"></span></p>
+      </div>
+    </div>
+
+    <!-- QUESTION -->
+    <div id="screen-question">
+      <div class="q-card" style="position:relative;overflow:hidden;isolation:isolate">
+        <div id="pQBgImage" style="position:absolute;inset:0;background-size:cover;background-position:center;border-radius:inherit;pointer-events:none;z-index:-1"></div>
+        <div class="flex-between" style="margin-bottom:1rem">
+          <span class="badge badge-accent" id="pQProgress"></span>
+          <div class="flex" style="gap:.5rem">
+            <span id="pPoints" class="badge badge-yellow"></span>
+            <div class="timer-wrap" id="pTimerWrap" style="display:none">
+              <svg class="timer-svg" width="80" height="80" viewBox="0 0 80 80">
+                <circle class="timer-bg" cx="40" cy="40" r="34"/>
+                <circle class="timer-ring" id="pTimerRing" cx="40" cy="40" r="34"
+                  stroke-dasharray="213.6" stroke-dashoffset="0"/>
+              </svg>
+              <div class="timer-text" id="pTimerText"></div>
+            </div>
+          </div>
+        </div>
+        <p id="pQText" style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:1.5rem;line-height:1.5"></p>
+
+        <!-- 3-second countdown before options appear -->
+        <div id="pCountdown" class="countdown-overlay" style="display:none">
+          <div id="pCountdownNum" class="countdown-num">3</div>
+          <p style="color:var(--muted);font-size:.85rem">Get ready...</p>
+        </div>
+
+        <div class="options-grid" id="pOptions"></div>
+      </div>
+    </div>
+
+    <!-- waiting screen removed: players now stay on question screen after answering -->
+
+    <!-- REVEAL RESULT -->
+    <div id="screen-result">
+      <div class="q-card text-center" style="width:100%">
+        <div class="result-icon" id="resultIcon"></div>
+        <h2 id="resultMsg" class="mt-1"></h2>
+      </div>
+      <div class="q-card" style="width:100%">
+        <div class="options-grid" id="resultOptions"></div>
+      </div>
+      <div class="q-card text-center" style="width:100%">
+        <div id="resultPointsEarned" style="font-size:2.2rem;font-weight:900"></div>
+        <p class="mt-1">pts this question</p>
+        <div class="divider"></div>
+        <div class="score-big" id="resultScore"></div>
+        <p>total score</p>
+        <p id="resultRank" class="mt-1" style="color:var(--accent);font-weight:700"></p>
+      </div>
+      <div class="q-card" style="width:100%">
+        <h3 style="margin-bottom:.85rem">How everyone answered</h3>
+        <div id="distBars"></div>
+      </div>
+      <button class="btn btn-ghost full-width" onclick="if(lastLeaderboard)showLBOverlay(lastLeaderboard)">
+        <img src="/images/trophy.png" alt="" style="height:20px;width:auto;vertical-align:middle"> Show Leaderboard
+      </button>
+    </div>
+
+    <!-- FINISHED -->
+    <div id="screen-finished">
+      <div class="q-card final-card">
+        <div id="finishedIcon"><img src="/images/trophy.png" alt="" style="height:90px;width:auto;object-fit:contain"></div>
+        <h2 class="mt-1">Game Over!</h2>
+        <p>Thanks for playing</p>
+        <div class="divider"></div>
+        <div class="score-big" id="finalScore"></div>
+        <p>your final score</p>
+        <div id="finalRank" class="badge badge-accent mt-2" style="font-size:.9rem"></div>
+      </div>
+      <div class="q-card" style="width:100%">
+        <h3>Final Leaderboard</h3>
+        <div id="finalLBRows" class="stack mt-2"></div>
+      </div>
+      <a href="/" class="btn btn-primary btn-lg">Play Again</a>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code');
+    const playerName = params.get('name');
+    if (!code || !playerName) { window.location.href = '/'; }
+
+    // ── Quiz question card background ─────────────────────────────
+    function applyBg(quiz) {
+      if (quiz?.appearance?.bgImage) {
+        const el = document.getElementById('pQBgImage');
+        el.style.backgroundImage = `url('${quiz.appearance.bgImage}')`;
+        el.style.opacity = (quiz.appearance.bgOpacity ?? 30) / 100;
+      }
+    }
+
+    // ── Session state (survives page reload) ─────────────────────
+    const SK = `ql_${code}_${playerName}`;
+    function saveState(patch) {
+      const s = loadState();
+      Object.assign(s, patch);
+      sessionStorage.setItem(SK, JSON.stringify(s));
+    }
+    function loadState() {
+      try { return JSON.parse(sessionStorage.getItem(SK)) || {}; } catch { return {}; }
+    }
+
+    const socket = io();
+    let myScore = 0;
+    let myPrevScore = 0;
+    let lastCorrect = false;
+    let didAnswer = false;
+    let myAnswerPosition = 0;
+    let myLastAnswerIndex = -1;
+    let timerInterval = null;
+    let countdownTimeout = null;
+    let currentOptions = [];
+    let timerSeconds = 0;
+    let lastLeaderboard = null;  // scores from the most recent reveal
+    let prevLeaderboard = [];    // scores from before this question's reveal
+
+    const saved = loadState();
+    if (saved.score) { myScore = saved.score; updateNavScore(myScore); }
+
+    socket.emit('player:join', { code, name: playerName });
+
+    // ── Join ──────────────────────────────────────────────────────
+    socket.on('player:joined', ({ name: n, quiz }) => {
+      document.getElementById('lobbyName').textContent = `Hi, ${n}!`;
+      document.getElementById('lobbyQuizTitle').textContent = quiz.title;
+      applyBg(quiz);
+      showScreen('lobby');
+    });
+
+    // ── Reconnect ─────────────────────────────────────────────────
+    socket.on('player:rejoined', ({ name: n, score, quiz, state }) => {
+      myScore = score;
+      updateNavScore(score);
+      saveState({ score });
+      document.getElementById('lobbyName').textContent = `Welcome back, ${n}!`;
+      document.getElementById('lobbyQuizTitle').textContent = quiz.title;
+      applyBg(quiz);
+      if (state === 'lobby') { showReconnectBanner(); showScreen('lobby'); }
+    });
+
+    // ── Question ──────────────────────────────────────────────────
+    socket.on('game:question', ({ index, total, text, options, points, timeLimit, startedAt, flow }) => {
+      hideLBOverlay();
+      cancelCountdown();
+      prevLeaderboard = lastLeaderboard || [];
+      myPrevScore = myScore;
+      if (timerInterval) clearInterval(timerInterval);
+
+      currentOptions = options;
+      myLastAnswerIndex = -1;
+      lastCorrect = false;
+      didAnswer = false;
+      myAnswerPosition = 0;
+      saveState({ qIndex: index, answered: false });
+
+      showScreen('question');
+      document.getElementById('pQProgress').textContent = `Q${index+1} / ${total}`;
+      document.getElementById('pPoints').textContent = `★ ${points}`;
+      document.getElementById('pQText').textContent = text;
+
+      const letters = ['A','B','C','D'];
+      document.getElementById('pOptions').innerHTML = options.map((o, i) => `
+        <button class="option-btn" onclick="submitAnswer(${i})" data-idx="${i}">
+          <div class="option-letter">${letters[i]}</div>
+          <span>${esc(o)}</span>
+        </button>`).join('');
+
+      const tw = document.getElementById('pTimerWrap');
+      if (timeLimit && flow !== 'self-paced') {
+        timerSeconds = timeLimit;
+        startCountdownThenTimer(timeLimit, startedAt);
+      } else {
+        tw.style.display = 'none';
+        timerSeconds = 0;
+        // No countdown for self-paced — show options immediately
+        document.getElementById('pCountdown').style.display = 'none';
+        document.getElementById('pOptions').style.removeProperty('display');
+      }
+    });
+
+    // ── 3-second countdown before options appear ──────────────────
+    function startCountdownThenTimer(timeLimit, startedAt) {
+      const elapsed = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+      const countdownLeft = Math.max(0, 3 - elapsed);
+
+      const tw       = document.getElementById('pTimerWrap');
+      const optionsEl = document.getElementById('pOptions');
+      const cdDiv    = document.getElementById('pCountdown');
+      const cdNum    = document.getElementById('pCountdownNum');
+
+      if (countdownLeft < 0.5) {
+        // Countdown already over — show options and timer immediately
+        cdDiv.style.display = 'none';
+        optionsEl.style.removeProperty('display');
+        tw.style.display = 'block';
+        startTimer(timeLimit, startedAt);
+        return;
+      }
+
+      // Hide options, show countdown
+      optionsEl.style.display = 'none';
+      tw.style.display = 'none';
+      cdDiv.style.display = 'flex';
+
+      let count = Math.ceil(countdownLeft);
+      showCountNum(cdNum, count);
+
+      // First tick aligns to the fractional second so subsequent ticks are on exact seconds
+      const firstDelay = countdownLeft % 1 > 0 ? (countdownLeft % 1) * 1000 : 1000;
+
+      function tick() {
+        count--;
+        if (count <= 0) {
+          cdDiv.style.display = 'none';
+          optionsEl.style.removeProperty('display');
+          tw.style.display = 'block';
+          startTimer(timeLimit, startedAt);
+        } else {
+          showCountNum(cdNum, count);
+          countdownTimeout = setTimeout(tick, 1000);
+        }
+      }
+      countdownTimeout = setTimeout(tick, firstDelay);
+    }
+
+    function showCountNum(el, n) {
+      // Restart the pop animation by forcing a reflow
+      el.classList.remove('countdown-num');
+      void el.offsetWidth;
+      el.classList.add('countdown-num');
+      el.textContent = n;
+    }
+
+    function cancelCountdown() {
+      if (countdownTimeout) { clearTimeout(countdownTimeout); countdownTimeout = null; }
+      // Reset countdown UI state
+      document.getElementById('pCountdown').style.display = 'none';
+      document.getElementById('pOptions').style.removeProperty('display');
+    }
+
+    // ── Submit answer ─────────────────────────────────────────────
+    function submitAnswer(idx) {
+      cancelCountdown();
+      myLastAnswerIndex = idx;
+      didAnswer = true;
+      socket.emit('player:answer', { code, answerIndex: idx });
+      // Stay on question screen — lock the chosen button, disable all others
+      document.querySelectorAll('#pOptions .option-btn').forEach(b => {
+        b.disabled = true;
+        if (parseInt(b.dataset.idx) === idx) b.classList.add('selected');
+      });
+    }
+
+    socket.on('player:answer:result', ({ correct, score, alreadyAnswered, answerIndex, answerPosition }) => {
+      myScore = score;
+      lastCorrect = correct;
+      if (!alreadyAnswered && answerPosition) myAnswerPosition = answerPosition;
+      updateNavScore(score);
+      saveState({ score });
+      // Reconnected player who already answered: restore their choice, lock buttons, stay on question
+      if (alreadyAnswered) {
+        cancelCountdown();
+        if (timerInterval) clearInterval(timerInterval);
+        didAnswer = true;
+        if (answerIndex !== undefined && answerIndex !== -1) myLastAnswerIndex = answerIndex;
+        document.querySelectorAll('#pOptions .option-btn').forEach(b => {
+          b.disabled = true;
+          if (parseInt(b.dataset.idx) === myLastAnswerIndex) b.classList.add('selected');
+        });
+      }
+    });
+
+    // ── Reveal ────────────────────────────────────────────────────
+    socket.on('game:reveal', ({ correctIndex, explanation, leaderboard, answerCounts, options: revealOptions }) => {
+      cancelCountdown();
+      if (timerInterval) clearInterval(timerInterval);
+
+      // Restore options for reconnect case (player missed game:question)
+      if (revealOptions && revealOptions.length) currentOptions = revealOptions;
+
+      const onQuestion = document.getElementById('screen-question').classList.contains('active');
+      const letters = ['A','B','C','D'];
+
+      function buildResultScreen() {
+        showScreen('result');
+        const notAnswered = !didAnswer;
+        const msg  = notAnswered ? "Time's up!" : lastCorrect ? 'Correct!' : 'Wrong!';
+        document.getElementById('resultIcon').innerHTML = notAnswered
+          ? '<img src="/images/time-over.png" alt="" style="height:100px;width:auto;object-fit:contain">'
+          : lastCorrect
+            ? '<img src="/images/correct.png" alt="" style="height:100px;width:auto;object-fit:contain">'
+            : '<img src="/images/wrong.png" alt="" style="height:100px;width:auto;object-fit:contain">';
+        document.getElementById('resultMsg').textContent  = msg;
+
+        // Options on result screen: correct=green, all wrong=red, player's choice marked
+        document.getElementById('resultOptions').innerHTML = currentOptions.map((o, i) => {
+          const isCorrect  = i === correctIndex;
+          const isMyChoice = i === myLastAnswerIndex && myLastAnswerIndex !== -1;
+          const cls        = isCorrect ? 'correct' : 'wrong';
+          const youMark    = isMyChoice
+            ? `<span style="margin-left:auto;flex-shrink:0;font-size:.72rem;font-weight:700;color:${isCorrect ? 'var(--green)' : 'var(--red)'}">← you</span>`
+            : '';
+          return `<button class="option-btn ${cls}" disabled>
+            <div class="option-letter">${letters[i]}</div>
+            <span>${esc(o)}</span>${youMark}
+          </button>`;
+        }).join('');
+
+        const pointsEarned = myScore - myPrevScore;
+        const ptEl = document.getElementById('resultPointsEarned');
+        ptEl.textContent = `+${pointsEarned}`;
+        ptEl.style.color = pointsEarned > 0 ? 'var(--green)' : 'var(--muted)';
+        document.getElementById('resultScore').textContent = myScore;
+
+        const me = leaderboard.find(p => p.name === playerName);
+        const ordinal = n => n + (['th','st','nd','rd'][((n%100>10&&n%100<20)?0:(n%10<4?n%10:0))] );
+        const posText = didAnswer && lastCorrect && myAnswerPosition > 0 ? ` · ${ordinal(myAnswerPosition)} to answer correctly` : '';
+        document.getElementById('resultRank').textContent = (me ? `Rank #${me.rank} of ${leaderboard.length}` : '') + posText;
+
+        document.getElementById('distBars').innerHTML = currentOptions.map((opt, i) => {
+          const data       = answerCounts[i] || { count: 0, pct: 0 };
+          const isCorrect  = i === correctIndex;
+          const isMyChoice = i === myLastAnswerIndex;
+          const isMyWrong  = isMyChoice && !lastCorrect;
+          const fillClass  = isCorrect ? 'correct-fill' : isMyWrong ? 'my-wrong' : '';
+          const labelStyle = isCorrect ? 'color:var(--green)' : isMyWrong ? 'color:var(--red)' : '';
+          const label      = isCorrect ? `${letters[i]}✓` : letters[i];
+          return `<div class="dist-bar-row">
+            <span class="dist-label" style="${labelStyle}">${label}</span>
+            <div class="dist-track"><div class="dist-fill ${fillClass}" style="width:${data.pct}%"></div></div>
+            <span class="dist-meta"><strong>${data.count}</strong> (${data.pct}%)</span>
+          </div>`;
+        }).join('');
+
+        if (explanation) {
+          document.getElementById('distBars').innerHTML +=
+            `<div class="card mt-2" style="border-color:var(--accent);font-size:.88rem"><strong>💡</strong> ${esc(explanation)}</div>`;
+        }
+
+        setTimeout(() => showLBOverlay(leaderboard), 1500);
+      }
+
+      if (onQuestion) {
+        // Color options in-place on question screen for 1.5 s, then transition
+        document.querySelectorAll('#pOptions .option-btn').forEach(btn => {
+          const idx = parseInt(btn.dataset.idx);
+          btn.disabled = true;
+          btn.classList.remove('selected');
+          if (idx === correctIndex) {
+            btn.classList.add('correct');
+          } else if (idx === myLastAnswerIndex) {
+            btn.classList.add('wrong');
+          } else {
+            btn.classList.add('reveal-dim');
+          }
+        });
+        setTimeout(buildResultScreen, 1500);
+      } else {
+        buildResultScreen();
+      }
+    });
+
+    // ── Finished ──────────────────────────────────────────────────
+    socket.on('game:finished', ({ leaderboard }) => {
+      hideLBOverlay();
+      showScreen('finished');
+      sessionStorage.removeItem(SK);
+      document.getElementById('finalScore').textContent = myScore;
+      const me = leaderboard.find(p => p.name === playerName);
+      const isWinner = me && me.rank === 1;
+      const finishedCard = document.querySelector('#screen-finished .final-card');
+      document.getElementById('finishedIcon').innerHTML = isWinner
+        ? '<img src="/images/trophy.png" alt="" style="height:90px;width:auto;object-fit:contain">'
+        : '<img src="/images/game-over-2.png" alt="" style="height:90px;width:auto;object-fit:contain">';
+      finishedCard.querySelector('h2').textContent = isWinner ? 'You Won!' : 'Game Over!';
+      finishedCard.querySelector('p').textContent = isWinner ? 'Congratulations!' : 'Thanks for playing';
+      if (me) document.getElementById('finalRank').textContent = isWinner ? '🥇 Champion!' : `🏅 Rank #${me.rank} of ${leaderboard.length}`;
+      renderSimpleLB('finalLBRows', leaderboard);
+    });
+
+    socket.on('game:paused', () => {
+      document.getElementById('pauseOverlay').classList.add('visible');
+    });
+
+    socket.on('game:resume:countdown', ({ seconds }) => {
+      const overlay = document.getElementById('pauseOverlay');
+      const cdEl = document.getElementById('pauseCountdownPl');
+      overlay.querySelector('p').textContent = 'Resuming...';
+      cdEl.style.display = 'block';
+      let n = seconds;
+      cdEl.textContent = n;
+      const iv = setInterval(() => {
+        n--;
+        if (n <= 0) {
+          clearInterval(iv);
+          overlay.classList.remove('visible');
+          cdEl.style.display = 'none';
+          overlay.querySelector('p').textContent = 'The host disconnected — the game will resume shortly';
+        } else {
+          cdEl.textContent = n;
+        }
+      }, 1000);
+    });
+
+    socket.on('error', msg => { toast(msg, 'error'); setTimeout(() => window.location.href = '/', 3500); });
+
+    // ── Leaderboard overlay (animated from old → new positions) ──
+    function showLBOverlay(lb) {
+      lastLeaderboard = lb;
+      const maxS   = Math.max(1, ...lb.map(p => p.score));
+      const medals = ['🥇','🥈','🥉'];
+      const hasOld = prevLeaderboard.length > 0;
+
+      // Build a name → new-player map
+      const newByName = {};
+      lb.forEach(p => { newByName[p.name] = p; });
+
+      // Starting order: previous positions with previous scores
+      const initOrder = hasOld
+        ? [
+            ...prevLeaderboard.map(p => ({
+              name: p.name, oldScore: p.score,
+              newScore: newByName[p.name]?.score ?? p.score,
+              newRank:  newByName[p.name]?.rank  ?? 99,
+              connected: newByName[p.name]?.connected ?? p.connected
+            })),
+            // Players who joined after the last reveal
+            ...lb.filter(p => !prevLeaderboard.find(x => x.name === p.name)).map(p => ({
+              name: p.name, oldScore: 0, newScore: p.score, newRank: p.rank, connected: p.connected
+            }))
+          ]
+        : lb.map(p => ({ name: p.name, oldScore: 0, newScore: p.score, newRank: p.rank, connected: p.connected }));
+
+      document.getElementById('lb-overlay-rows').innerHTML = initOrder.map((p, i) => {
+        const isMe      = p.name === playerName;
+        const oldBarPct = p.oldScore > 0 ? Math.round(p.oldScore / maxS * 100) : 0;
+        const barCls    = isMe ? 'me-bar'
+          : hasOld
+            ? (i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal')
+            : (p.newRank === 1 ? 'gold' : p.newRank === 2 ? 'silver' : p.newRank === 3 ? 'bronze' : 'normal');
+        return `<div class="lb-ov-entry" data-name="${esc(p.name)}" data-newscore="${p.newScore}">
+          <div class="lb-ov-row">
+            <span class="lb-ov-rank">${hasOld ? (i+1) : p.newRank}</span>
+            <span class="lb-ov-name${isMe ? ' me' : ''}">${esc(p.name)}${isMe ? ' (you)' : ''}${!p.connected ? ' 📴' : ''}</span>
+            <span class="lb-ov-score" data-target="${p.newScore}">${p.oldScore}</span>
+          </div>
+          <div class="lb-ov-bar-track">
+            <div class="lb-ov-bar-fill ${barCls}" style="width:${oldBarPct}%;transition:none"></div>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('lb-overlay').classList.add('visible');
+
+      // Phase 2 (350ms): animate bars growing + scores counting up
+      setTimeout(() => {
+        document.querySelectorAll('#lb-overlay-rows .lb-ov-entry').forEach(entry => {
+          const newScore  = parseInt(entry.dataset.newscore) || 0;
+          const newBarPct = newScore > 0 ? Math.round(newScore / maxS * 100) : 0;
+          const barFill   = entry.querySelector('.lb-ov-bar-fill');
+          if (barFill) {
+            barFill.style.transition = 'width 1.2s cubic-bezier(.4,0,.2,1)';
+            setTimeout(() => { barFill.style.width = newBarPct + '%'; }, 30);
+          }
+        });
+
+        document.querySelectorAll('#lb-overlay-rows .lb-ov-score').forEach(el => {
+          const from = parseInt(el.textContent) || 0;
+          const to   = parseInt(el.dataset.target) || 0;
+          if (from === to) return;
+          const t0 = performance.now();
+          (function tick(now) {
+            const t    = Math.min(1, (now - t0) / 1200);
+            const ease = 1 - Math.pow(1 - t, 3);
+            el.textContent = Math.round(from + ease * (to - from));
+            if (t < 1) requestAnimationFrame(tick);
+            else el.textContent = to;
+          })(performance.now());
+        });
+
+        // Phase 3 (after scores done): FLIP reorder to new positions
+        if (hasOld) setTimeout(() => reorderLBEntries(lb, maxS), 1500);
+      }, 350);
+    }
+
+    function reorderLBEntries(lb, maxS) {
+      const container = document.getElementById('lb-overlay-rows');
+      const entries   = [...container.querySelectorAll('.lb-ov-entry')];
+      const medals    = ['🥇','🥈','🥉'];
+
+      // FLIP — First: record current Y positions
+      const firstPos = {};
+      entries.forEach(el => { firstPos[el.dataset.name] = el.getBoundingClientRect().top; });
+
+      // Move entries to new sorted order
+      lb.forEach(p => {
+        const el = entries.find(e => e.dataset.name === p.name);
+        if (el) container.appendChild(el);
+      });
+
+      // Update rank labels and bar colors for new positions
+      lb.forEach((p, i) => {
+        const el = entries.find(e => e.dataset.name === p.name);
+        if (!el) return;
+        const isMe = p.name === playerName;
+        const rankEl = el.querySelector('.lb-ov-rank');
+        if (rankEl) rankEl.textContent = i + 1;
+        const barFill = el.querySelector('.lb-ov-bar-fill');
+        if (barFill) {
+          const cls = isMe ? 'me-bar' : i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
+          barFill.className = `lb-ov-bar-fill ${cls}`;
+        }
+      });
+
+      // FLIP — Invert: apply reverse transforms so entries appear to be in old positions
+      entries.forEach(el => {
+        const lastTop = el.getBoundingClientRect().top;
+        const delta   = (firstPos[el.dataset.name] ?? lastTop) - lastTop;
+        el.style.transition = 'none';
+        el.style.transform  = `translateY(${delta}px)`;
+      });
+
+      // FLIP — Play: animate to final positions
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          entries.forEach(el => {
+            el.style.transition = 'transform 0.65s cubic-bezier(.4,0,.2,1)';
+            el.style.transform  = 'translateY(0)';
+          });
+          setTimeout(() => { entries.forEach(el => { el.style.transition = ''; }); }, 750);
+        });
+      });
+    }
+
+    function hideLBOverlay() {
+      document.getElementById('lb-overlay').classList.remove('visible');
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────
+    function showScreen(s) {
+      ['lobby','question','result','finished'].forEach(n => {
+        document.getElementById(`screen-${n}`).classList.toggle('active', n === s);
+      });
+    }
+
+    function updateNavScore(score) {
+      const el = document.getElementById('navScore');
+      el.style.display = 'inline-block';
+      el.textContent = score + ' pts';
+    }
+
+    function showReconnectBanner() {
+      if (document.querySelector('.reconnect-banner')) return;
+      const banner = document.createElement('div');
+      banner.className = 'reconnect-banner';
+      banner.textContent = '🔄 Reconnected — your score is restored';
+      document.querySelector('.play-center').prepend(banner);
+      setTimeout(() => banner.remove(), 4000);
+    }
+
+    function renderSimpleLB(elId, lb) {
+      document.getElementById(elId).innerHTML = lb.slice(0,8).map(p => `
+        <div class="leaderboard-row">
+          <span class="rank">${p.rank}</span>
+          <span class="player-name">
+            ${esc(p.name)}${p.name === playerName ? ' <span style="color:var(--accent);font-size:.75rem">(you)</span>' : ''}
+            ${!p.connected ? ' <span style="color:var(--muted);font-size:.72rem">📴</span>' : ''}
+          </span>
+          <span class="player-score">${p.score}</span>
+        </div>`).join('');
+    }
+
+    // ── Timer (server startedAt keeps it accurate after reload) ───
+    function startTimer(seconds, serverStartedAt) {
+      const endMs = serverStartedAt
+        ? (serverStartedAt + seconds * 1000)
+        : (Date.now() + seconds * 1000);
+
+      const ring   = document.getElementById('pTimerRing');
+      const text   = document.getElementById('pTimerText');
+      const circum = 213.6;
+
+      function update() {
+        const rem = Math.max(0, Math.ceil((endMs - Date.now()) / 1000));
+        text.textContent = rem;
+        ring.style.strokeDashoffset = circum * (1 - rem / seconds);
+        ring.style.stroke = rem <= 5 ? 'var(--red)' : rem <= 10 ? 'var(--yellow)' : 'var(--accent)';
+        return rem;
+      }
+
+      if (update() <= 0) {
+        document.querySelectorAll('#pOptions .option-btn').forEach(b => b.disabled = true);
+        return;
+      }
+      timerInterval = setInterval(() => {
+        if (update() <= 0) {
+          clearInterval(timerInterval);
+          document.querySelectorAll('#pOptions .option-btn').forEach(b => b.disabled = true);
+        }
+      }, 500);
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+    function toast(msg, type = 'info') {
+      let stack = document.getElementById('toastStack');
+      if (!stack) {
+        stack = Object.assign(document.createElement('div'), { id: 'toastStack', className: 'toast-stack' });
+        document.body.appendChild(stack);
+      }
+      const el = Object.assign(document.createElement('div'), { className: `toast ${type}`, textContent: msg });
+      stack.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0'; el.style.transform = 'translateX(20px)';
+        setTimeout(() => el.remove(), 240);
+      }, 3200);
+    }
+  </script>
+</body>
+</html>
